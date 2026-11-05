@@ -14,32 +14,46 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
+      # Android SDK уже установлен на сервере, только принимаем лицензии
+      - name: Accept Android licenses
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
+
+      # Распаковываем проект из zip, лежащего в корне репозитория
+      - name: Unpack project
+        run: |
+          ZIP=$(ls *.zip | head -1)
+          echo "Using $ZIP"
+          mkdir -p "$RUNNER_TEMP/src"
+          unzip -q "$ZIP" -d "$RUNNER_TEMP/src"
+          PROJ=$(dirname "$(find "$RUNNER_TEMP/src" -name settings.gradle.kts | head -1)")
+          echo "PROJ=$PROJ" >> "$GITHUB_ENV"
+          mkdir -p "$GITHUB_WORKSPACE/out"
 
       # Если секрета с ключом нет, создаём новый ключ (только для первого раза)
       - name: Prepare keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          mkdir -p "$RUNNER_TEMP/ks" out
+          mkdir -p "$RUNNER_TEMP/ks"
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ks/tiktrim.jks"
             echo "Using keystore from secrets"
           else
-            echo "NEW_KEYSTORE=1" >> "$GITHUB_ENV"
             keytool -genkeypair -v -keystore "$RUNNER_TEMP/ks/tiktrim.jks" \
               -alias tiktrim -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass tiktrim123456 -keypass tiktrim123456 \
               -dname "CN=MarkusVidan"
-            cp "$RUNNER_TEMP/ks/tiktrim.jks" out/tiktrim.jks
-            base64 -w0 "$RUNNER_TEMP/ks/tiktrim.jks" > out/KEYSTORE_BASE64.txt
+            cp "$RUNNER_TEMP/ks/tiktrim.jks" "$GITHUB_WORKSPACE/out/tiktrim.jks"
+            base64 -w0 "$RUNNER_TEMP/ks/tiktrim.jks" > "$GITHUB_WORKSPACE/out/KEYSTORE_BASE64.txt"
           fi
 
       - name: Build release APK
+        working-directory: ${{ env.PROJ }}
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/ks/tiktrim.jks
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'tiktrim123456' }}
@@ -48,7 +62,7 @@ jobs:
         run: gradle :app:assembleRelease --no-daemon
 
       - name: Collect APK
-        run: cp app/build/outputs/apk/release/app-release.apk out/TikTrim-release.apk
+        run: cp "$PROJ/app/build/outputs/apk/release/app-release.apk" out/TikTrim-release.apk
 
       - uses: actions/upload-artifact@v4
         with:
