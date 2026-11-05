@@ -3,6 +3,9 @@ name: Release APK
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -68,3 +71,17 @@ jobs:
         with:
           name: TikTrim-release
           path: out/
+
+      # Публикуем релиз: приложение берёт обновления отсюда
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' "$PROJ/app/build.gradle.kts")
+          NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' "$PROJ/app/build.gradle.kts")
+          TAG="build-$CODE"
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          gh release create "$TAG" out/TikTrim-release.apk \
+            --title "TikTrim $NAME" \
+            --notes "Версия $NAME"
+            
