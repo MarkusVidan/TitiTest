@@ -1,5 +1,7 @@
 name: Release APK
 
+name: Release APK
+
 on:
   workflow_dispatch:
 
@@ -80,8 +82,8 @@ jobs:
           CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' "$PROJ/app/build.gradle.kts")
           NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' "$PROJ/app/build.gradle.kts")
           TAG="build-$CODE"
+          awk 'BEGIN{RS=""} NR==1{print; exit}' "$PROJ/app/src/main/assets/changelog.txt" > notes.txt
           gh release delete "$TAG" --yes --cleanup-tag || true
           gh release create "$TAG" out/TikTrim-release.apk \
             --title "TikTrim $NAME" \
-            --notes "Версия $NAME"
-            
+            --notes-file notes.txt
