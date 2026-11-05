@@ -1,7 +1,5 @@
 name: Release APK
 
-name: Release APK
-
 on:
   workflow_dispatch:
 
